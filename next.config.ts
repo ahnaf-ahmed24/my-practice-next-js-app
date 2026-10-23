@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,
+  // মঙ্গোডিবি ড্রাইভার সার্ভার-সাইডে বান্ডেল না করে এক্সটার্নাল রাখুন
+  serverExternalPackages: ["mongodb"],
   turbopack: {
     rules: {
       "*.css": {

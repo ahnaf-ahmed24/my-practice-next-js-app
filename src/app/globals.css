@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
+/* ক্লাস-ভিত্তিক ডার্ক মোড (html.light / html.dark) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
+  --background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 25%, #ecfeff 50%, #fdf2f8 75%, #eef2ff 100%);
   --foreground: #171717;
+  --gradient-accent: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #a855f7 100%);
 }
 
 @theme inline {
@@ -12,15 +16,53 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html.dark {
+  --background: linear-gradient(135deg, #020617 0%, #1e1b4b 35%, #0f172a 70%, #020617 100%);
+  --foreground: #ededed;
+  --gradient-accent: linear-gradient(135deg, #60a5fa 0%, #818cf8 50%, #c084fc 100%);
 }
 
 body {
   background: var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* গ্রেডিয়েন্ট টেক্সট ইউটিলিটি */
+.gradient-text {
+  background: var(--gradient-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* গ্রেডিয়েন্ট বাটন/এলিমেন্ট ইউটিলিটি */
+.gradient-bg {
+  background: var(--gradient-accent);
+}
+
+/* মসৃণ স্ক্রল + স্টিকি হেডারের জন্য অফসেট (h-16 নেভবার) */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+/* ভাসমান অ্যানিমেশন */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(6deg);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 6s ease-in-out 3s infinite;
 }

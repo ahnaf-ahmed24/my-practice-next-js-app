@@ -46,6 +46,7 @@ const AdminConsole = ({
     const [filter, setFilter] = useState<Filter>('all');
     const [lastSync, setLastSync] = useState(() => new Date().toISOString());
     const [now, setNow] = useState(() => Date.now());
+    const [steppingDown, setSteppingDown] = useState(false);
 
     // সার্ভার থেকে আসা প্রাথমিক ড্যাটা বদলালে সিঙ্ক হয়
     const [syncedOrders, setSyncedOrders] = useState(initialOrders);
@@ -120,6 +121,32 @@ const AdminConsole = ({
         router.refresh();
     };
 
+    // অ্যাডমিন পদ ছাড়া — রোল 'user' হয়ে গেলে অ্যাডমিন স্কোপের সেশনে আর কিছুই চলে না,
+    // তাই সাইন আউট করে হোমপেজে পাঠানো হয় (আবার কাস্টমার প্যানেলে লগইন করলেই হবে)
+    const handleStepDown = async () => {
+        if (steppingDown) return;
+        setSteppingDown(true);
+
+        try {
+            const response = await fetch('/api/admin/step-down', { method: 'POST' });
+            const data = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                toast.error(data?.error ?? 'Could not step down.');
+                return;
+            }
+
+            await authClient.signOut();
+            toast.success('You are no longer an administrator.');
+            router.push('/');
+            router.refresh();
+        } catch {
+            toast.error('Network error. Please try again.');
+        } finally {
+            setSteppingDown(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* ===== হেডার ===== */}
@@ -146,13 +173,27 @@ const AdminConsole = ({
                     </p>
                 </div>
 
-                <button
-                    type="button"
-                    onClick={handleSignOut}
-                    className="rounded-xl border border-slate-300/70 bg-white/70 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-600 transition-colors hover:border-rose-400 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300 dark:hover:border-rose-500 dark:hover:text-rose-400"
-                >
-                    Sign out
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* পদ ছাড়া — প্রাথমিক অ্যাডমিন ছাড়া সব অ্যাডমিনের জন্য */}
+                    {!isInitialAdmin && (
+                        <button
+                            type="button"
+                            onClick={handleStepDown}
+                            disabled={steppingDown}
+                            className="rounded-xl border border-amber-300/70 bg-amber-50/70 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-amber-700 transition-colors hover:border-amber-400 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-800/70 dark:bg-slate-900/70 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                        >
+                            {steppingDown ? 'Stepping down…' : 'Step down'}
+                        </button>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={handleSignOut}
+                        className="rounded-xl border border-slate-300/70 bg-white/70 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-600 transition-colors hover:border-rose-400 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300 dark:hover:border-rose-500 dark:hover:text-rose-400"
+                    >
+                        Sign out
+                    </button>
+                </div>
             </div>
 
             {/* ===== পরিসংখ্যান ===== */}

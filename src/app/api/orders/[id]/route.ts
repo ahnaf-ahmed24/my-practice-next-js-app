@@ -22,6 +22,19 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
         return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
     }
 
+    // প্রসেসিং বা তার পরের ধাপে (শিপড) ঢুকলে আর বাতিল করা যায় না —
+    // পুরনো অর্ডারে স্ট্যাটাস ফিল্ড না থাকলেও প্রকৃত অবস্থা বয়স থেকে মিলিয়ে দেখা হয়
+    const status = resolveOrderStatus(order);
+    if (status === 'processing' || status === 'shipped') {
+        return NextResponse.json(
+            {
+                error:
+                    'This order is already being processed — an administrator has approved it, so it can no longer be cancelled.',
+            },
+            { status: 409 },
+        );
+    }
+
     const deleted = await deleteOrder(session.user.id, id);
 
     if (!deleted) {

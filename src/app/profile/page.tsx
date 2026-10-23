@@ -65,10 +65,11 @@ const ProfileContent = async () => {
         );
     }
 
-    const [orders, addresses, adminRequest] = await Promise.all([
+    const [orders, addresses, adminRequest, initial] = await Promise.all([
         getUserOrders(user.id),
         getUserAddresses(user.id),
         findAdminRequestByUserId(user.id),
+        isInitialAdmin(user.id),
     ]);
 
     // ড্যাশবোর্ডের পরিসংখ্যান
@@ -126,6 +127,7 @@ const ProfileContent = async () => {
     // (নাম ও ইমেইলও এখান থেকেই যায়, রিকোয়েস্ট বডি থেকে নয়)
     const adminRequestView: AdminRequestState | null = adminRequest
         ? {
+              id: adminRequest._id?.toHexString() ?? '',
               status: adminRequest.status,
               requestedAt: new Date(adminRequest.requestedAt).toLocaleDateString('en-US', {
                   year: 'numeric',
@@ -191,6 +193,7 @@ const ProfileContent = async () => {
                         name={user.name}
                         email={user.email}
                         isAdmin={user.role === 'admin'}
+                        isInitialAdmin={initial}
                         request={adminRequestView}
                     />
 

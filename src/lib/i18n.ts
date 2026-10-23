@@ -215,6 +215,12 @@ export const translations = {
             '✅ অনুমোদন হয়েছে — আপনি এখন অ্যাডমিন। অ্যাডমিন প্যানেলে লগইন করুন।',
         'profile.adminRequestOpenPanel': 'অ্যাডমিন প্যানেলে যান',
         'profile.adminRequestFailed': 'আবেদন পাঠানো যায়নি। আবার চেষ্টা করুন।',
+        'profile.adminRequestCancel': 'আবেদন তুলে নিন',
+        'profile.adminRequestCancelling': 'তুলে নেওয়া হচ্ছে…',
+        'profile.adminRequestCancelled': 'আপনার অ্যাডমিন আবেদনটি তুলে নেওয়া হয়েছে।',
+        'profile.stepDown': '🛡️ অ্যাডমিন পদ ছাড়ুন',
+        'profile.stepDownDone': 'আপনি আর অ্যাডমিন নন — আবার গ্রাহক হিসেবে ফিরে এসেছেন।',
+        'profile.stepDownInitial': 'প্রাথমিক (ইনিশিয়াল) অ্যাডমিন পদ ছাড়তে পারেন না।',
     },
 
     en: {
@@ -429,6 +435,12 @@ export const translations = {
             '✅ Approved — you are now an administrator. Sign in through the administrator panel.',
         'profile.adminRequestOpenPanel': 'Go to the administrator panel',
         'profile.adminRequestFailed': 'Could not submit the request. Please try again.',
+        'profile.adminRequestCancel': 'Withdraw request',
+        'profile.adminRequestCancelling': 'Withdrawing…',
+        'profile.adminRequestCancelled': 'Your administrator request has been withdrawn.',
+        'profile.stepDown': '🛡️ Step down as administrator',
+        'profile.stepDownDone': 'You are no longer an administrator — welcome back as a customer!',
+        'profile.stepDownInitial': 'The initial administrator cannot step down.',
     },
 };
 

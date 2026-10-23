@@ -102,16 +102,17 @@ const OrderHistory = ({ orders }: { orders: OrderView[] }) => {
         };
     }, []);
 
-    // অর্ডার মুছে ফেলা (বাতিল করা)
+    // অর্ডার মুছে ফেলা (বাতিল করা) — প্রসেসিং/শিপড অর্ডারে সার্ভার 409 দেয়, কারণটি দেখানো হয়
     const handleDelete = async (id: string) => {
         setDeletingId(id);
 
         const response = await fetch(`/api/orders/${id}`, { method: 'DELETE' }).catch(() => null);
+        const data = (await response?.json().catch(() => null)) as { error?: string } | null;
 
         setDeletingId(null);
 
         if (!response?.ok) {
-            toast.error(t('profile.error'));
+            toast.error(data?.error ?? t('profile.error'));
             return;
         }
 

@@ -118,12 +118,17 @@ export const updateOrderStatus = async (
 // অর্ডার মুছে ফেলে (অর্ডার নম্বর দিয়ে) — অ্যাডমিন অনুমোদনের আগের অর্ডার বাতিল করা যায়,
 // আর ডেলিভার হওয়া অর্ডার ইতিহাস থেকে মুছে ফেলা যায়
 export const deleteOrder = async (userId: string, orderId: string) => {
+    // স্ট্যাটাস ফিল্ড না থাকা পুরনো অর্ডারের কাট-অফ — বয়স থেকে ডেলিভারড (>৭২ ঘণ্টা) হলেই মোছা যায়
+    // (getOrderStatus-এর নিয়মের সাথে মিলিয়ে রাখতে হবে)
+    const deliveredCutoff = new Date(Date.now() - 72 * 3_600_000);
+
     const result = await orders().deleteOne({
         userId,
         orderId,
         $or: [
             // স্ট্যাটাস না থাকা পুরোনো অর্ডারগুলোও মুছে ফেলা যায়
-            { status: { $exists: false } },
+            // (বয়স থেকে ডেলিভারড — ৭২ ঘণ্টা পরেই)
+            { status: { $exists: false }, createdAt: { $lt: deliveredCutoff } },
             { status: 'pending' },
             { status: 'delivered' },
             { status: 'cancelled' },

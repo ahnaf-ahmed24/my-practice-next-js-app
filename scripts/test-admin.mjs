@@ -10,6 +10,8 @@
 //   ৬. গ্রাহক লাইভ ট্র্যাকিং আপডেট দেখতে পায়
 //   ৭. গ্রাহক নিজের কাস্টমার অ্যাকাউন্টের নাম ও ইমেইল দিয়ে অ্যাডমিন আবেদন করতে পারে
 //   ৮. ইনিশিয়াল অ্যাডমিন অনুমোদন দিলে সেই গ্রাহক অ্যাডমিন হয়ে যায়
+//   ৯. পেন্ডিং অ্যাডমিন আবেদন তুলে নেওয়া যায়; অনুমোদিত অ্যাডমিন পদ ছাড়তে পারেন (প্রাথমিক ছাড়া)
+//  ১০. প্রসেসিং/শিপড অর্ডার গ্রাহক আর বাতিল করতে পারে না, পেন্ডিং অর্ডার বাতিল করা যায়
 //
 // টেস্ট শুরুর আগে থাকা অ্যাডমিনদের ভূমিকা সাময়িকভাবে সরিয়ে দেওয়া হয় (যাতে
 // "প্রথম অ্যাডমিন" নিয়মটি পরীক্ষা করা যায়) এবং শেষে আগের অবস্থা ফিরিয়ে আনা হয়।
@@ -576,7 +578,7 @@ try {
     // অনুরোধের নাম ও ইমেইল সেশন (কাস্টমার অ্যাকাউন্ট) থেকেই যায়
     res = await j('/api/admin/requests', { method: 'GET' }, 'initial');
     body = await res.json().catch(() => ({}));
-    const customerRequest = (body.requests ?? []).find((item) => item.email === customer.email);
+    let customerRequest = (body.requests ?? []).find((item) => item.email === customer.email);
     ok(
         'the request holds the customer account name and email',
         customerRequest?.name === customer.name && customerRequest?.status === 'pending',
@@ -612,8 +614,51 @@ try {
     res = await j('/api/admin/requests', { method: 'POST' }, 'initial-customer');
     ok('an existing administrator cannot request access again', res.status === 409, `status=${res.status}`);
 
+    // ===== ২০ক. গ্রাহক অপেক্ষমাণ আবেদন তুলে নেয়, তারপর আবার আবেদন করে =====
     if (!customerRequest) {
         console.log('✖ customer administrator request not found — aborting');
+        process.exit(1);
+    }
+
+    // অন্য ইউজার আমার অনুরোধ তুলে নিতে পারে না
+    res = await j(
+        `/api/admin/requests/${customerRequest.id}`,
+        { method: 'DELETE' },
+        'initial-customer',
+    );
+    ok('another user cannot withdraw the request', res.status === 404, `status=${res.status}`);
+
+    // গ্রাহক নিজের অপেক্ষমাণ অনুরোধ তুলে নেয়
+    res = await j(`/api/admin/requests/${customerRequest.id}`, { method: 'DELETE' }, 'customer');
+    body = await res.json().catch(() => ({}));
+    ok(
+        'customer withdraws their pending administrator request',
+        res.status === 200 && body.deleted === true,
+        `body=${JSON.stringify(body)}`,
+    );
+
+    res = await j('/api/admin/me', { method: 'GET' }, 'customer');
+    body = await res.json().catch(() => ({}));
+    ok('the withdrawn request is gone', body.request === null, `body=${JSON.stringify(body)}`);
+
+    // তুলে নেওয়ার পর আবার আবেদন করা যায়
+    res = await j('/api/admin/requests', { method: 'POST' }, 'customer');
+    body = await res.json().catch(() => ({}));
+    ok(
+        'customer can apply again after withdrawing',
+        res.status === 200 && body.status === 'pending',
+        `body=${JSON.stringify(body)}`,
+    );
+
+    // অনুমোদনের জন্য এখন নতুন অনুরোধটিই বলবৎ
+    res = await j('/api/admin/requests', { method: 'GET' }, 'initial');
+    body = await res.json().catch(() => ({}));
+    customerRequest = (body.requests ?? []).find(
+        (item) => item.email === customer.email && item.status === 'pending',
+    );
+
+    if (!customerRequest) {
+        console.log('✖ re-applied administrator request not found — aborting');
         process.exit(1);
     }
 
@@ -641,6 +686,80 @@ try {
 
     res = await j('/api/admin/orders', { method: 'GET' }, 'customer-admin');
     ok('approved customer can use admin APIs', res.status === 200, `status=${res.status}`);
+
+    // ===== ২২. প্রসেসিং/শিপড অর্ডার আর বাতিল করা যায় না =====
+    res = await j(`/api/orders/${orderId}`, { method: 'DELETE' }, 'customer');
+    ok('a shipped order cannot be cancelled', res.status === 409, `status=${res.status}`);
+
+    // পেন্ডিং অর্ডার বাতিল করা যায়
+    const cancelOrderId = `NM-${stamp}-C`;
+    res = await j(
+        '/api/orders',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                orderId: cancelOrderId,
+                items: [{ id: 'p1', name: 'Test Product', price: 999, image: '/products/test.png' }],
+                subtotal: 999,
+                deliveryCharge: 130,
+                paymentMethod: 'Cash on Delivery',
+                estimatedDelivery: '2–4 working days',
+                address: shippingAddress,
+            }),
+        },
+        'customer',
+    );
+    ok('customer places a third order', res.status === 201, `status=${res.status}`);
+
+    res = await j(`/api/orders/${cancelOrderId}`, { method: 'DELETE' }, 'customer');
+    body = await res.json().catch(() => ({}));
+    ok(
+        'a pending order can still be cancelled',
+        res.status === 200 && body.deleted === true,
+        `body=${JSON.stringify(body)}`,
+    );
+
+    res = await j('/api/orders', { method: 'GET' }, 'customer');
+    body = await res.json().catch(() => ({}));
+    ok(
+        'the cancelled order disappears from the list',
+        !(body.orders ?? []).some((order) => order.id === cancelOrderId),
+    );
+
+    // ===== ২৩. অ্যাডমিন পদ ছাড়া =====
+    // প্রাথমিক (ইনিশিয়াল) অ্যাডমিন পদ ছাড়তে পারেন না — তিনিই একমাত্র অনুমোদনদাতা
+    res = await j('/api/admin/step-down', { method: 'POST' }, 'initial');
+    ok('the initial administrator cannot step down', res.status === 403, `status=${res.status}`);
+
+    // অনুমোদিত গ্রাহক (কাস্টমার স্কোপ) পদ ছাড়তে পারেন
+    res = await j('/api/admin/step-down', { method: 'POST' }, 'customer');
+    body = await res.json().catch(() => ({}));
+    ok(
+        'an approved administrator can step down',
+        res.status === 200 && body.status === 'stepped-down',
+        `body=${JSON.stringify(body)}`,
+    );
+
+    res = await j('/api/admin/me', { method: 'GET' }, 'customer');
+    body = await res.json().catch(() => ({}));
+    ok('a stepped-down user is a customer again', res.status === 200 && body.isAdmin === false, `body=${JSON.stringify(body)}`);
+
+    // অ্যাডমিন প্যানেলের (অ্যাডমিন স্কোপ) সেশনও এখন কাজ করে না
+    res = await j('/api/admin/orders', { method: 'GET' }, 'customer-admin');
+    ok('a stepped-down admin loses admin APIs', res.status === 403, `status=${res.status}`);
+
+    // ইতিমধ্যে গ্রাহক — আবার পদ ছাড়তে পারে না
+    res = await j('/api/admin/step-down', { method: 'POST' }, 'customer');
+    ok('a non-admin cannot step down', res.status === 409, `status=${res.status}`);
+
+    // পুরো চক্র আবার — সে আবার অ্যাডমিন আবেদন করতে পারেন
+    res = await j('/api/admin/requests', { method: 'POST' }, 'customer');
+    body = await res.json().catch(() => ({}));
+    ok(
+        'a stepped-down admin can apply again',
+        res.status === 200 && body.status === 'pending',
+        `body=${JSON.stringify(body)}`,
+    );
 } finally {
     // ===== পরিষ্কার: আগের অ্যাডমিনদের ভূমিকা ফেরত ও টেস্ট ড্যাটা মুছে ফেলা =====
     await restoreAdmins(savedAdmins);

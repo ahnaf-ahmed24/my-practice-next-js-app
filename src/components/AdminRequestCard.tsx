@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useTranslations } from '@/components/LanguageProvider';
 
 export type AdminRequestState = {
+    id: string;
     status: 'pending' | 'approved' | 'rejected';
     requestedAt: string; // সার্ভার ফরম্যাট করে পাঠায় (হাইড্রেশন মিল থাকে)
     reviewedAt: string | null;
@@ -17,46 +18,86 @@ type AdminRequestCardProps = {
     name: string;
     email: string;
     isAdmin: boolean;
+    isInitialAdmin: boolean;
     request: AdminRequestState | null;
 };
 
 // গ্রাহকের ড্যাশবোর্ডের অ্যাডমিন রেজিস্ট্রেশন কার্ড —
-// কাস্টমার অ্যাকাউন্টের নাম ও ইমেইল দিয়ে অ্যাডমিন আবেদন, অবস্থা দেখায়
-const AdminRequestCard = ({ name, email, isAdmin, request }: AdminRequestCardProps) => {
+//  - কাস্টমার অ্যাকাউন্টের নাম ও ইমেইল দিয়ে অ্যাডমিন আবেদন
+//  - অপেক্ষমাণ আবেদন তুলে নেওয়া যায়
+//  - অনুমোদনের পর পদ ছাড়া যায় (প্রাথমিক অ্যাডমিন ছাড়া)
+const AdminRequestCard = ({
+    name,
+    email,
+    isAdmin,
+    isInitialAdmin,
+    request,
+}: AdminRequestCardProps) => {
     const router = useRouter();
     const t = useTranslations();
-    const [submitting, setSubmitting] = useState(false);
+    const [busy, setBusy] = useState(false);
 
-    const submit = async () => {
-        if (submitting) return;
-        setSubmitting(true);
+    // সাধারণ POST — আবেদন বা পদ ছাড়া
+    const post = async (path: string, successMessage: string) => {
+        if (busy) return;
+        setBusy(true);
 
         try {
-            // নাম ও ইমেইল পাঠানো হয় না — সার্ভার সেশন থেকেই নেয়
-            const response = await fetch('/api/admin/requests', { method: 'POST' });
+            const response = await fetch(path, { method: 'POST' });
             const data = (await response.json().catch(() => null)) as
                 | { status?: string; error?: string }
                 | null;
 
             if (!response.ok) {
-                toast.error(data?.error ?? t('profile.adminRequestFailed'));
+                toast.error(data?.error ?? t('profile.error'));
                 return;
             }
 
             toast.success(
-                data?.status === 'active'
-                    ? t('profile.adminRequestActive')
-                    : t('profile.adminRequestSent'),
+                data?.status === 'active' ? t('profile.adminRequestActive') : successMessage,
             );
             router.refresh(); // সার্ভার থেকে নতুন অবস্থা আসবে
         } catch {
             toast.error(t('profile.networkError'));
         } finally {
-            setSubmitting(false);
+            setBusy(false);
         }
     };
 
-    // অনুমোদিত অ্যাডমিন — অ্যাডমিন প্যানেলে লগইনের নির্দেশনা
+    // নতুন আবেদন — নাম ও ইমেইল পাঠানো হয় না, সার্ভার সেশন থেকেই নেয়
+    const submit = () => post('/api/admin/requests', t('profile.adminRequestSent'));
+
+    // অপেক্ষমাণ আবেদন তুলে নেওয়া
+    const withdraw = async () => {
+        if (busy || !request) return;
+        setBusy(true);
+
+        try {
+            const response = await fetch(`/api/admin/requests/${request.id}`, {
+                method: 'DELETE',
+            });
+            const data = (await response.json().catch(() => null)) as
+                | { error?: string }
+                | null;
+
+            if (!response.ok) {
+                toast.error(data?.error ?? t('profile.error'));
+                return;
+            }
+
+            toast.success(t('profile.adminRequestCancelled'));
+            router.refresh();
+        } catch {
+            toast.error(t('profile.networkError'));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    // অ্যাডমিন পদ ছাড়া (অনুমোদনের পর)
+    const stepDown = () => post('/api/admin/step-down', t('profile.stepDownDone'));
+
+    // অনুমোদিত অ্যাডমিন — অ্যাডমিন প্যানেলে লগইন বা পদ ছাড়া
     if (isAdmin) {
         return (
             <section className="rounded-3xl border border-emerald-200/80 bg-emerald-50/90 p-6 shadow-sm backdrop-blur dark:border-emerald-900/70 dark:bg-emerald-950/40">
@@ -66,17 +107,35 @@ const AdminRequestCard = ({ name, email, isAdmin, request }: AdminRequestCardPro
                 <p className="mt-3 text-sm leading-relaxed text-emerald-800 dark:text-emerald-300">
                     {t('profile.adminRequestApproved')}
                 </p>
-                <Link
-                    href="/admin/login"
-                    className="mt-4 inline-block rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 bg-[length:200%_auto] px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-lg shadow-emerald-600/25 transition-all duration-500 hover:bg-right active:scale-95"
-                >
-                    {t('profile.adminRequestOpenPanel')}
-                </Link>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Link
+                        href="/admin/login"
+                        className="rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 bg-[length:200%_auto] px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-lg shadow-emerald-600/25 transition-all duration-500 hover:bg-right active:scale-95"
+                    >
+                        {t('profile.adminRequestOpenPanel')}
+                    </Link>
+
+                    {isInitialAdmin ? (
+                        <span className="text-[11px] font-semibold leading-relaxed text-emerald-700/80 dark:text-emerald-400/80">
+                            {t('profile.stepDownInitial')}
+                        </span>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={stepDown}
+                            disabled={busy}
+                            className="rounded-xl border border-rose-300/70 bg-white/70 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-rose-600 transition-colors hover:border-rose-400 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-800/70 dark:bg-slate-900/60 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                        >
+                            {busy ? t('profile.saving') : t('profile.stepDown')}
+                        </button>
+                    )}
+                </div>
             </section>
         );
     }
 
-    // অনুরোধ অনুমোদনের অপেক্ষায়
+    // অনুরোধ অনুমোদনের অপেক্ষায় — চাইলে তুলে নেওয়া যায়
     if (request?.status === 'pending') {
         return (
             <section className="rounded-3xl border border-amber-200/80 bg-amber-50/90 p-6 shadow-sm backdrop-blur dark:border-amber-900/70 dark:bg-amber-950/40">
@@ -92,6 +151,14 @@ const AdminRequestCard = ({ name, email, isAdmin, request }: AdminRequestCardPro
                 <p className="mt-2 text-xs text-amber-700/80 dark:text-amber-400/80">
                     {t('profile.adminRequestRequestedAt', { date: request.requestedAt })}
                 </p>
+                <button
+                    type="button"
+                    onClick={withdraw}
+                    disabled={busy}
+                    className="mt-4 rounded-xl border border-rose-300/70 bg-white/70 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-rose-600 transition-colors hover:border-rose-400 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-800/70 dark:bg-slate-900/60 dark:text-rose-300 dark:hover:bg-rose-950/40"
+                >
+                    {busy ? t('profile.adminRequestCancelling') : t('profile.adminRequestCancel')}
+                </button>
             </section>
         );
     }
@@ -114,10 +181,10 @@ const AdminRequestCard = ({ name, email, isAdmin, request }: AdminRequestCardPro
                 <button
                     type="button"
                     onClick={submit}
-                    disabled={submitting}
+                    disabled={busy}
                     className="mt-4 rounded-xl border border-rose-300/70 bg-white/70 px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-rose-600 transition-colors hover:border-rose-400 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-800/70 dark:bg-slate-900/60 dark:text-rose-300 dark:hover:bg-rose-950/40"
                 >
-                    {submitting ? t('profile.adminRequestSubmitting') : t('profile.adminRequestRetry')}
+                    {busy ? t('profile.adminRequestSubmitting') : t('profile.adminRequestRetry')}
                 </button>
             </section>
         );
@@ -138,10 +205,10 @@ const AdminRequestCard = ({ name, email, isAdmin, request }: AdminRequestCardPro
             <button
                 type="button"
                 onClick={submit}
-                disabled={submitting}
+                disabled={busy}
                 className="mt-4 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-700 bg-[length:200%_auto] px-5 py-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-lg shadow-indigo-600/25 transition-all duration-500 hover:bg-right active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
-                {submitting ? t('profile.adminRequestSubmitting') : t('profile.adminRequestSubmit')}
+                {busy ? t('profile.adminRequestSubmitting') : t('profile.adminRequestSubmit')}
             </button>
         </section>
     );

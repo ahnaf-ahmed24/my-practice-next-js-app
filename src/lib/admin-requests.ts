@@ -101,6 +101,16 @@ export const setAdminRequestStatus = async (
     return result.matchedCount > 0;
 };
 
+// গ্রাহক নিজের অপেক্ষমাণ অনুরোধ তুলে নেয় (সম্পূর্ণ মুছে ফেলা হয়)
+// শুধু pending অনুরোধই তুলে নেওয়া যায় — অনুমোদন/বাতিল হয়ে গেলে নয়
+export const deleteAdminRequest = async (userId: string, id: string) => {
+    const objectId = toObjectId(id);
+    if (!objectId) return false;
+
+    const result = await requests().deleteOne({ _id: objectId, userId, status: 'pending' });
+    return result.deletedCount > 0;
+};
+
 // স্ট্রিং থেকে ObjectId — ভুল ফরম্যাট হলে null
 const toObjectId = (id: string) => (ObjectId.isValid(id) ? new ObjectId(id) : null);
 

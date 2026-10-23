@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
-import { ADMIN_ROLE, isInitialAdmin, requireAdmin, setUserRole } from '@/lib/admin';
-import { getAdminRequest, setAdminRequestStatus } from '@/lib/admin-requests';
+import { ADMIN_ROLE, isInitialAdmin, requireAdmin, requireCustomer, setUserRole } from '@/lib/admin';
+import {
+    deleteAdminRequest,
+    getAdminRequest,
+    setAdminRequestStatus,
+} from '@/lib/admin-requests';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -67,4 +71,34 @@ export async function POST(request: Request, { params }: RouteContext) {
         status: decision === 'approve' ? 'approved' : 'rejected',
         userId: adminRequest.userId,
     });
+}
+
+// গ্রাহক নিজের অপেক্ষমাণ অ্যাডমিন অনুরোধ তুলে নেয় (DELETE)
+// নিজের অনুরোধই তুলে নেওয়া যায়, অন্যের নয় — আর শুধু 'pending' অনুরোধই
+export async function DELETE(_request: Request, { params }: RouteContext) {
+    const guard = await requireCustomer();
+    if (!guard.ok) {
+        return NextResponse.json({ error: guard.error }, { status: guard.status });
+    }
+
+    const { id } = await params;
+
+    const adminRequest = await getAdminRequest(id);
+    if (!adminRequest || adminRequest.userId !== guard.session.user.id) {
+        return NextResponse.json({ error: 'Request not found.' }, { status: 404 });
+    }
+
+    if (adminRequest.status !== 'pending') {
+        return NextResponse.json(
+            { error: 'This request has already been reviewed.' },
+            { status: 409 },
+        );
+    }
+
+    const deleted = await deleteAdminRequest(guard.session.user.id, id);
+    if (!deleted) {
+        return NextResponse.json({ error: 'Request not found.' }, { status: 404 });
+    }
+
+    return NextResponse.json({ deleted: true });
 }
